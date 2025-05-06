@@ -1,0 +1,37 @@
+# API Context Path
+server.servlet.context-path=/api
+spring.application.name=user-service
+server.port=8080
+
+# Database Configuration
+spring.datasource.write.jdbcUrl=jdbc:mysql://localhost:3306/user_write_db
+spring.datasource.write.username=root
+spring.datasource.write.password=Mink281104@
+spring.datasource.write.driver-class-name=com.mysql.cj.jdbc.Driver
+
+spring.datasource.read.urls[0]=jdbc:mysql://localhost:3306/user_read_db1
+spring.datasource.read.urls[1]=jdbc:mysql://localhost:3306/user_read_db2
+spring.datasource.read.username=root
+spring.datasource.read.password=Mink281104@
+
+# JPA Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.show-sql=true
+
+# JWT Configuration
+jwt.expiration=18000000
+jwt.secret=ce79fe078c69bed115b9728a037aa3647c34e877274ca119ecef95f1f419d1b51e73d1bb5092a2286194656a8764157bd35923fadcc4ca5dce6aacaff970d4e99068b19b6406c6c490a77e8c9e1e5952367ca62f84836be6cb923af0599ecd129d81a0029c9fde49cf7f6714d0c3ff5cb054b24512b137d53f865028841355864fa2a5698b899d88211f92fd69dc03f48e621a92b9cc4f549788aac193fa4852b53a1e4916cc6ead3ac1c55115012ea11aec64c4ca8952bce3c355ff428456ddf24f0cd1a09165058287535c2e88a3a6a26415c75dbe5c0e93ddd80dd74d3f7d772631917ef8f462d95be387e65da8f833e57fcd3eeacf4f39307698d1bcf149
+
+# Dubbo configuration
+dubbo.application.name=user-service
+dubbo.registry.address=zookeeper://localhost:2181
+dubbo.protocol.name=dubbo
+dubbo.protocol.port=20880
+dubbo.consumer.check=false
+dubbo.scan.base-packages=com.kienlongbank.nguyenminh.user.service.impl
+
+# Kafka Configuration for User Registration Events
+spring.cloud.stream.kafka.binder.brokers=localhost:9092
+spring.cloud.stream.bindings.userRegistrationSupplier-out-0.destination=user-registration 

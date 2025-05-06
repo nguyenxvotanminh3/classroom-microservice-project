@@ -1,0 +1,21 @@
+# Test environment configuration
+spring:
+  application:
+    name: security-service-test
+
+# Disable Dubbo for tests
+dubbo:
+  enabled: false
+  
+# Security configuration
+security:
+  jwt:
+    secret: "HBf6hNGZdNn2Qq8aklloiuytrdcvbhgfdserty12345678"
+    expiration: 86400000  # 24 hours in milliseconds
+    
+# Emergency access in case Dubbo is down
+emergency:
+  auth:
+    enabled: true
+    username: admin
+    password: "$2a$10$4gD78hT7JDT.f2mO/RyiCuo9MnxnKwUJGVRnV5vHsGBnXRcy8jQja" # Bcrypt for "admin123" 

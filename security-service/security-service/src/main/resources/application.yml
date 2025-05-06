@@ -1,0 +1,17 @@
+spring:
+  messages:
+    basename: messages
+    encoding: UTF-8
+  application:
+    name: security-service
+  cloud:
+    vault:
+      uri: http://localhost:8200
+      token: hvs.OR9nCCOLowlRHJ9VaqPZaD8x
+
+      kv:
+        enabled: true
+        backend: secret
+        default-context: security-service
+  config:
+    import: vault:// 

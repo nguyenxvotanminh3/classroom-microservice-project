@@ -1,0 +1,30 @@
+<configuration>
+    <!-- Appender cho console -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Appender cho access log -->
+    <appender name="ACCESS_LOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/access_log.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/access_log.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Logger cho access log (dùng thủ công hoặc cho filter access log sau này) -->
+    <logger name="ACCESS_LOG" level="INFO" additivity="false">
+        <appender-ref ref="ACCESS_LOG"/>
+    </logger>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration> 
