@@ -9,7 +9,6 @@ import com.kienlongbank.temporal.workflow.LoginWorkflow;
 import com.kienlongbank.temporal.workflow.EmailActivities;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
-import io.temporal.client.WorkflowStub;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

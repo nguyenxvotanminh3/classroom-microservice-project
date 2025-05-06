@@ -18,12 +18,10 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 @Component
 @Slf4j
@@ -115,7 +113,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             }
 
             // Validate token with security service
-            log.info("validating token : " + token);
+            log.info("validating token : {}", token);
             boolean isValid = securityServiceClient.validateToken(token);
             if (!isValid) {
                 log.warn("Invalid or expired token for path: {}", path);
@@ -143,9 +141,9 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 
                 // Add username and roles to headers for downstream services
                 List<String> roles = securityServiceClient.extractRoles(token);
-                log.info("roles : " + roles);
+                log.info("roles : {}", roles);
                 String username = securityServiceClient.getUsernameFromToken(token);
-                log.info("username : " + username);
+                log.info("username : {}", username);
                 if (username == null) {
                     log.warn("Failed to extract username from token for path: {}", path);
                     return onError(exchange, getLocalizedMessage("auth.error.invalid_token", "Invalid token"), HttpStatus.UNAUTHORIZED);

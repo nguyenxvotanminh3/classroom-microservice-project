@@ -1,13 +1,11 @@
 package com.kienlongbank.apigateway.client;
 
 import com.kienlongbank.api.SecurityService;
-import com.kienlongbank.api.security.JwtValidationService;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,8 +13,6 @@ import java.util.Map;
 @Slf4j
 public class SecurityServiceClient {
 
-    @DubboReference(version = "1.0.0", group = "security-jwt-related", check = false, timeout = 5000, retries = 0)
-    private JwtValidationService jwtValidationService;
 
     @DubboReference(version = "1.0.0", group = "security", check = false, timeout = 5000, retries = 0)
     private SecurityService securityService;
@@ -63,7 +59,7 @@ public class SecurityServiceClient {
     public List<String> extractRoles(String token) {
         try {
             log.debug("Extracting roles from token");
-            return Collections.singletonList(jwtValidationService.extractRoles(token).toString());
+            return Collections.singletonList(securityService.extractRoles(token).toString());
         } catch (Exception e) {
             log.error("Error extracting roles from token: {}", e.getMessage());
             return Collections.emptyList();
@@ -97,7 +93,7 @@ public class SecurityServiceClient {
     public boolean hasAnyRole(String token, List<String> roles) {
         try {
             log.debug("Checking if token has any of roles: {} using JwtValidationService", roles);
-            return jwtValidationService.hasAnyRole(token, roles);
+            return securityService.hasAnyRole(token, roles);
         } catch (Exception e) {
             log.error("Error checking roles: {}", e.getMessage());
             return false;
@@ -118,7 +114,7 @@ public class SecurityServiceClient {
             // Fallback to JwtValidationService if SecurityService fails
             try {
                 log.debug("Falling back to JwtValidationService for getting username");
-                return jwtValidationService.getUsernameFromToken(token);
+                return securityService.getUsernameFromToken(token);
             } catch (Exception ex) {
                 log.error("Error getting username from token: {}", ex.getMessage());
                 return null;
