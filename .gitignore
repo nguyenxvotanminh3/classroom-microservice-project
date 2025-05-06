@@ -35,6 +35,8 @@ build/
 ### Logs ###
 logs/
 *.log
+zookeeper-log/
+zookeeper-data/
 
 ### Environment Variables ###
 .env
