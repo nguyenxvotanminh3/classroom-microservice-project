@@ -1,7 +1,6 @@
 package com.kienlongbank.apigateway.filter;
 
 import com.kienlongbank.api.SecurityService;
-import com.kienlongbank.apigateway.client.SecurityServiceClient;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -34,11 +33,9 @@ import io.opentelemetry.context.Context;
 @Slf4j
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
-//    @Autowired
-//    private SecurityServiceClient securityServiceClient;
 
     @DubboReference(version = "1.0.0", group = "security", check = false, timeout = 5000, retries = 0)
-    private SecurityService securityServiceClient;
+    private SecurityService securityService;
     
     @Autowired(required = false)
     private MessageSource messageSource;
@@ -120,7 +117,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
                         return Mono.using(
                             validateSpan::makeCurrent,
-                            validationScope -> Mono.fromCallable(() -> securityServiceClient.validateToken(token))
+                            validationScope -> Mono.fromCallable(() -> securityService.validateToken(token))
                                 .map(isValid -> {
                                     validateSpan.setAttribute("token.valid", isValid);
                                     if (!isValid) {
