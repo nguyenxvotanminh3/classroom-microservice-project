@@ -122,7 +122,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                                         validateSpan.setStatus(StatusCode.ERROR);
                                         throw new RuntimeException("Invalid token");
                                     }
-                                    return isValid;
+                                    return true;
                                 })
                                 .then(chain.filter(exchange))
                                 .doFinally(signalType -> validateSpan.end()),
