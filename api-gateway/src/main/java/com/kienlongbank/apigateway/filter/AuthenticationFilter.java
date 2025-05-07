@@ -1,9 +1,11 @@
 package com.kienlongbank.apigateway.filter;
 
+import com.kienlongbank.api.SecurityService;
 import com.kienlongbank.apigateway.client.SecurityServiceClient;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -32,8 +34,11 @@ import io.opentelemetry.context.Context;
 @Slf4j
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
-    @Autowired
-    private SecurityServiceClient securityServiceClient;
+//    @Autowired
+//    private SecurityServiceClient securityServiceClient;
+
+    @DubboReference(version = "1.0.0", group = "security", check = false, timeout = 5000, retries = 0)
+    private SecurityService securityServiceClient;
     
     @Autowired(required = false)
     private MessageSource messageSource;
