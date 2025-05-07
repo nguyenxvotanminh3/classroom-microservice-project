@@ -1,6 +1,7 @@
 package com.kienlongbank.classroomservice.service.impl;
 
 
+import com.kienlongbank.api.UserService;
 import com.kienlongbank.classroomservice.client.UserServiceClient;
 import com.kienlongbank.classroomservice.dto.ClassroomRequest;
 import com.kienlongbank.classroomservice.dto.ClassroomResponse;
@@ -8,6 +9,7 @@ import com.kienlongbank.classroomservice.exception.ClassroomException;
 import com.kienlongbank.classroomservice.model.Classroom;
 import com.kienlongbank.classroomservice.repository.ClassroomRepository;
 import com.kienlongbank.classroomservice.service.ClassroomService;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
