@@ -3,7 +3,6 @@ package com.kienlongbank.classroomservice.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.kienlongbank.classroomservice.config.WireMockConfig;
-import com.kienlongbank.classroomservice.config.TestSecurityConfig;
 import com.kienlongbank.classroomservice.dto.ClassroomRequest;
 import com.kienlongbank.classroomservice.dto.ClassroomResponse;
 import com.kienlongbank.classroomservice.service.ClassroomService;
@@ -37,7 +36,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"wiremock.server.port=9561"})
-@Import({WireMockConfig.class, TestSecurityConfig.class})
 @DirtiesContext
 @ActiveProfiles("test")
 @AutoConfigureMockMvc

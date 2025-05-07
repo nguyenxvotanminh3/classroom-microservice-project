@@ -3,7 +3,7 @@ package com.kienlongbank.classroomservice.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kienlongbank.classroomservice.dto.ClassroomRequest;
 import com.kienlongbank.classroomservice.dto.ClassroomResponse;
-import com.kienlongbank.classroomservice.config.TestSecurityConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +28,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension.class)
-@Import(TestSecurityConfig.class)
 public class ClassroomControllerIntegrationTest {
 
     @Autowired
