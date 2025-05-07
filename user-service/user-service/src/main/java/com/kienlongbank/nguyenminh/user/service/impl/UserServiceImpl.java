@@ -1,8 +1,5 @@
 package com.kienlongbank.nguyenminh.user.service.impl;
 
-
-
-
 import com.kienlongbank.api.SecurityService;
 import com.kienlongbank.nguyenminh.config.datasource.DataSourceContextHolder;
 import com.kienlongbank.nguyenminh.user.dto.UserRequest;
@@ -26,6 +23,7 @@ import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.stream.function.StreamBridge;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -43,6 +41,7 @@ public class UserServiceImpl implements UserService {
     private final EncryptPasswordSerivce encryptPasswordSerivce;
     private final StreamBridge streamBridge;
     private final UserMapper userMapper;
+    private final MessageSource messageSource;
     
     @Value("${jwt.secret}")
     private String secret;
@@ -68,7 +67,7 @@ public class UserServiceImpl implements UserService {
         
         if (usernameExists) {
             log.warn("Username already exists: {}", userRequest.getUsername());
-            throw new UserException("Username already exists");
+            throw new UserException("user.create.failed.duplicate.username", new Object[]{userRequest.getUsername()}, messageSource);
         }
         
         log.info("Checking if email: {} already exists", userRequest.getEmail());
@@ -77,7 +76,7 @@ public class UserServiceImpl implements UserService {
         
         if (emailExists) {
             log.warn("Email already exists: {}", userRequest.getEmail());
-            throw new UserException("Email already exists");
+            throw new UserException("user.create.failed.duplicate.email", new Object[]{userRequest.getUsername(), userRequest.getEmail()}, messageSource);
         }
 
         // Create new user
@@ -159,7 +158,7 @@ public class UserServiceImpl implements UserService {
         log.info("getUserById - Using DataSource: {}", currentDs != null ? currentDs : "default");
         
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new UserException("User not found with id: " + id));
+                .orElseThrow(() -> new UserException("user.notfound", new Object[]{id}, messageSource));
         
         log.info("Found user with ID {} in database: {}", id, currentDs);
         return userMapper.convertToUserResponse(user);
@@ -232,18 +231,18 @@ public class UserServiceImpl implements UserService {
     @Bulkhead(name = USER_SERVICE)
     public UserResponse updateUser(Long id, UserRequest userRequest) {
         User existingUser = userRepository.findById(id)
-                .orElseThrow(() -> new UserException("User not found with id: " + id));
+                .orElseThrow(() -> new UserException("user.notfound", new Object[]{id}, messageSource));
         
         // Check if username is being changed and if it already exists
         if (!existingUser.getUsername().equals(userRequest.getUsername()) &&
                 userRepository.existsByUsername(userRequest.getUsername())) {
-            throw new UserException("Username already exists");
+            throw new UserException("user.update.failed.duplicate.username", new Object[]{userRequest.getUsername()}, messageSource);
         }
         
         // Check if email is being changed and if it already exists
         if (!existingUser.getEmail().equals(userRequest.getEmail()) &&
                 userRepository.existsByEmail(userRequest.getEmail())) {
-            throw new UserException("Email already exists");
+            throw new UserException("user.update.failed.duplicate.email", new Object[]{userRequest.getUsername(), userRequest.getEmail()}, messageSource);
         }
         
         // Update user details
@@ -277,7 +276,7 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(Long id) {
         if (!userRepository.existsById(id)) {
             log.warn("DELETE USER - User not found with ID: {}", id);
-            throw new UserException("User not found with id: " + id);
+            throw new UserException("user.notfound", new Object[]{id}, messageSource);
         }
         
         // Thực hiện xóa trên WRITE database
