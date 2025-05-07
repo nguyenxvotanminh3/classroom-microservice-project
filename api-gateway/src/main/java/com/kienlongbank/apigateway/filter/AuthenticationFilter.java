@@ -106,7 +106,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                             authSpan.setAttribute("auth.error", "missing_token");
                             authSpan.setStatus(StatusCode.ERROR);
-                            return onError(exchange);
+                            return onError(exchange, "No authorization header");
                         }
 
                         String token = authHeader.substring(7);
@@ -118,15 +118,37 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                         return Mono.using(
                             validateSpan::makeCurrent,
                             validationScope -> Mono.fromCallable(() -> securityService.validateToken(token))
-                                .map(isValid -> {
+                                .flatMap(isValid -> {
                                     validateSpan.setAttribute("token.valid", isValid);
                                     if (!isValid) {
                                         validateSpan.setStatus(StatusCode.ERROR);
-                                        throw new RuntimeException("Invalid token");
+                                        return Mono.error(new RuntimeException("Invalid token"));
                                     }
-                                    return true;
+                                    
+                                    // Kiểm tra quyền nếu có danh sách quyền yêu cầu
+                                    if (config.getRequiredRoles() != null && !config.getRequiredRoles().isEmpty()) {
+                                        validateSpan.setAttribute("required_roles", String.join(",", config.getRequiredRoles()));
+                                        log.debug("Checking roles for path {}: {}", path, config.getRequiredRoles());
+                                        
+                                        return Mono.fromCallable(() -> securityService.hasAnyRole(token, config.getRequiredRoles()))
+                                            .flatMap(hasRole -> {
+                                                validateSpan.setAttribute("has_required_role", hasRole);
+                                                if (!hasRole) {
+                                                    validateSpan.setStatus(StatusCode.ERROR);
+                                                    return onError(exchange, "Insufficient privileges");
+                                                }
+                                                return chain.filter(exchange);
+                                            });
+                                    }
+                                    
+                                    return chain.filter(exchange);
                                 })
-                                .then(chain.filter(exchange))
+                                .onErrorResume(error -> {
+                                    log.error("Error during token validation or role check: {}", error.getMessage());
+                                    validateSpan.setStatus(StatusCode.ERROR);
+                                    validateSpan.setAttribute("error", error.getMessage());
+                                    return onError(exchange, error.getMessage());
+                                })
                                 .doFinally(signalType -> validateSpan.end()),
                                 Scope::close
                         );
@@ -160,7 +182,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                path.contains("api-docs/swagger-config");
     }
 
-    private Mono<Void> onError(ServerWebExchange exchange) {
+    private Mono<Void> onError(ServerWebExchange exchange, String errorMessage) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         
@@ -170,7 +192,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
             "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
             HttpStatus.UNAUTHORIZED.value(),
             HttpStatus.UNAUTHORIZED.getReasonPhrase(),
-                "No authorization header",
+            errorMessage != null ? errorMessage : "No authorization header",
             exchange.getRequest().getURI().getPath()
         );
         

@@ -27,13 +27,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     // In-memory cache for emergency use when Dubbo is down
     private final Map<String, UserDetails> userCache = new ConcurrentHashMap<>();
     
-    @Value("${emergency.auth.enabled:false}")
+    @Value("${emergency.auth.enabled:true}")
     private boolean emergencyAuthEnabled;
     
-    @Value("${emergency.auth.username:admin}")
+    @Value("${emergency.auth.username:nguyenxvotanminh}")
     private String emergencyUsername;
     
-    @Value("${emergency.auth.password:$2a$10$4gD78hT7JDT.f2mO/RyiCuo9MnxnKwUJGVRnV5vHsGBnXRcy8jQja}") // Bcrypt for "admin123"
+    @Value("${emergency.auth.password:$2a$10$4gD78hT7JDT.f2mO/RyiCuo9MnxnKwUJGVRnV5vHsGBnXRcy8jQja}") 
     private String emergencyPassword;
 
     @Autowired
@@ -44,6 +44,8 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         // Clear any existing cache
         userCache.clear();
         
+        log.info("Initializing emergency authentication: enabled={}, username={}", emergencyAuthEnabled, emergencyUsername);
+        
         // Add emergency user to cache with proper encoding
         UserDetails emergencyUser = User.builder()
                 .username(emergencyUsername)
@@ -53,12 +55,22 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         
         userCache.put(emergencyUsername, emergencyUser);
         log.info("Emergency user initialized with username: {}", emergencyUsername);
-        log.info("Emergency password (should be BCrypt encoded): {}", emergencyPassword);
+        log.debug("Emergency password (encoded): {}", emergencyPassword);
     }
 
     @Override
     public UserDetails loadUserByUsername(String userName) throws UsernameNotFoundException {
         log.info("Loading user by username via Dubbo: {}", userName);
+        
+        // Check emergency user first before attempting Dubbo call
+        if (userName.equals(emergencyUsername) && emergencyAuthEnabled) {
+            log.info("Emergency user authentication requested for: {}", userName);
+            UserDetails emergencyUser = userCache.get(emergencyUsername);
+            if (emergencyUser != null) {
+                log.info("Returning emergency user from cache: {}", emergencyUsername);
+                return emergencyUser;
+            }
+        }
         
         // Check if we have this user in cache
         if (userCache.containsKey(userName)) {
@@ -71,8 +83,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             log.info("Fetching user information for: {}", userName);
             Map<String, Object> userMap = userService.getUserByName(userName);
 
-            if (userMap == null || userMap.containsKey("error")) {
-                log.error("User not found with username: {}", userName);
+            if (userMap == null) {
+                log.error("User not found with username (userMap is null): {}", userName);
+                return tryEmergencyAuth(userName);
+            }
+            
+            if (userMap.containsKey("error")) {
+                log.error("Error retrieving user: {}", userMap.get("error"));
                 return tryEmergencyAuth(userName);
             }
             

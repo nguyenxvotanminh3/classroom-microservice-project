@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -23,10 +23,6 @@ public class OpenApiConfig {
         Server mainServer = new Server()
                 .url("http://localhost:8082")
                 .description("Classroom Service - Direct");
-        
-        Server apiServer = new Server()
-                .url("http://localhost:8082/api")
-                .description("Classroom Service - with /api context");
                 
         SecurityScheme securityScheme = new SecurityScheme()
                 .type(SecurityScheme.Type.HTTP)
@@ -34,7 +30,7 @@ public class OpenApiConfig {
                 .bearerFormat("JWT");
                 
         return new OpenAPI()
-                .servers(Arrays.asList(mainServer, apiServer))
+                .servers(List.of(mainServer))
                 .components(new Components().addSecuritySchemes("bearerAuth", securityScheme))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .info(new Info()
