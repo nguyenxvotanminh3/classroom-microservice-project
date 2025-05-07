@@ -11,7 +11,6 @@ import com.kienlongbank.nguyenminh.user.dto.UserResponseLogin;
 import com.kienlongbank.nguyenminh.user.event.UserRegistrationEvent;
 import com.kienlongbank.nguyenminh.user.exception.CreateUserFallbackException;
 import com.kienlongbank.nguyenminh.user.exception.UserException;
-import com.kienlongbank.nguyenminh.user.handler.JwtSecurityHandler;
 import com.kienlongbank.nguyenminh.user.mapper.UserMapper;
 import com.kienlongbank.nguyenminh.user.model.User;
 import com.kienlongbank.nguyenminh.user.repository.UserRepository;
@@ -25,7 +24,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.stereotype.Service;
@@ -44,7 +42,6 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final EncryptPasswordSerivce encryptPasswordSerivce;
     private final StreamBridge streamBridge;
-    private final JwtSecurityHandler jwtSecurityHandler;
     private final UserMapper userMapper;
     
     @Value("${jwt.secret}")
@@ -306,9 +303,6 @@ public class UserServiceImpl implements UserService {
 
             
             try {
-                // Try to get username from token first
-//                String tokenUsername = jwtSecurityHandler.extractUsernameFromToken(token);
-//                isValidToken = tokenUsername != null && tokenUsername.equals(userName);
                 isValidToken = securityService.validateTokenForUsername(token,userName);
                 log.info("Local JWT validation result: {}, username from token: {}", isValidToken, userName);
             } catch (Exception e) {
@@ -342,28 +336,25 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Error validating user access: " + e.getMessage(), e);
         }
     }
-//
-//    @Override
-//    public String getUsernameFromToken(String token) {
-//        return "";
-//    }
 
-//    @Override
-//    public String getUsernameFromToken(String token) {
-//        try {
-//            // First attempt to use Dubbo service
-//
-//            } catch (Exception e) {
-//                log.warn("Dubbo service call failed for getUsernameFromToken, falling back to local validation: {}", e.getMessage());
-//            }
-//
-//            // Fallback to local implementation using JwtSecurityHandler
-//            return jwtSecurityHandler.extractUsernameFromToken(token);
-//        } catch (Exception e) {
-//            log.error("Error extracting username from token: {}", e.getMessage());
-//            return null;
-//        }
-//    }
+    /**
+     * Find user by username without token validation
+     * This method is used for internal operations and testing
+     */
+    public UserResponseLogin findByUsernameWithoutValidation(String userName) {
+        log.info("Finding user by username without token validation: {}", userName);
+        
+        Optional<User> optionalUser = userRepository.findByUsername(userName);
+        if (optionalUser.isEmpty()) {
+            throw new RuntimeException(String.format("Could not find any user with username %s", userName));
+        }
+
+        User user = optionalUser.get();
+        UserResponseLogin userResponseLogin = new UserResponseLogin();
+        BeanUtils.copyProperties(user, userResponseLogin);
+        return userResponseLogin;
+    }
+
 
 
 } 

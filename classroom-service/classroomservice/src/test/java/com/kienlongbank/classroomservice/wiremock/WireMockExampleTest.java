@@ -3,7 +3,7 @@ package com.kienlongbank.classroomservice.wiremock;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.kienlongbank.classroomservice.config.BaseTestConfig;
-import com.kienlongbank.classroomservice.config.TestSecurityConfig;
+
 import com.kienlongbank.classroomservice.config.WireMockConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({BaseTestConfig.class, TestSecurityConfig.class, WireMockConfig.class})
+
 @ActiveProfiles("test")
 public class WireMockExampleTest {
 

@@ -9,7 +9,7 @@ import com.kienlongbank.classroomservice.model.StudentClassroom;
 import com.kienlongbank.classroomservice.repository.ClassroomRepository;
 import com.kienlongbank.classroomservice.repository.StudentClassroomRepository;
 import com.kienlongbank.classroomservice.client.UserServiceClient;
-import com.kienlongbank.classroomservice.config.TestSecurityConfig;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ExtendWith(SpringExtension.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-@Import(TestSecurityConfig.class)
+
 public class StudentClassroomControllerIntegrationTest {
 
     @Autowired

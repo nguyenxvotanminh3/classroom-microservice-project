@@ -52,6 +52,8 @@ public interface SecurityService {
      * @return true if the user has any of the roles, false otherwise
      */
     boolean hasAnyRole(String token, List<String> roles);
+    String getUsernameFromToken(String token);
+
 
     boolean validateTokenForUsername(String token, String requestedUsername);
 }

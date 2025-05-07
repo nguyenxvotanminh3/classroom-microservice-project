@@ -32,11 +32,10 @@ public interface SecurityService {
      * @return A map containing user details
      */
     Map<String, Object> getUserDetailsFromToken(String token);
-
-    String getRoleFromToken(String token);
-
     boolean hasRole(String token, String role);
-
     boolean hasAnyRole(String token, List<String> roles);
     boolean validateTokenForUsername(String token, String requestedUsername);
+    String getUsernameFromToken(String token);
+    List<String> extractRoles(String token);
+
 } 

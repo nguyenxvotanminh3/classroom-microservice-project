@@ -2,6 +2,7 @@ package com.kienlongbank.securityservice.service;
 
 import com.kienlongbank.api.SecurityService;
 import com.kienlongbank.securityservice.config.JwtEncryptionConfig;
+import com.kienlongbank.securityservice.config.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +20,7 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 public class SecurityServiceDubboImpl implements SecurityService {
-
+    private final JwtUtils jwtUtils;
     @Value("${jwt.secret}")
     private String secret;
 
@@ -153,6 +154,21 @@ public class SecurityServiceDubboImpl implements SecurityService {
         
         return userRoles.stream().anyMatch(roles::contains);
     }
+
+    @Override
+    public String getUsernameFromToken(String token) {
+        try {
+            // Giải mã JWE token để lấy JWT
+            String jwt = jwtEncryptionConfig.decryptJweToJwt(token);
+
+            // Lấy username từ token
+            return jwtUtils.extractUsername(jwt);
+        } catch (Exception e) {
+            log.error("Error extracting username from token: {}", e.getMessage());
+            return null;
+        }
+    }
+
 
     private String generateToken(String username) {
         Map<String, Object> claims = new HashMap<>();

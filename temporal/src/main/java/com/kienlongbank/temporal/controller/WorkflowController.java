@@ -9,7 +9,6 @@ import com.kienlongbank.temporal.workflow.LoginWorkflow;
 import com.kienlongbank.temporal.workflow.EmailActivities;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
-import io.temporal.client.WorkflowStub;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +20,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/workflow")
 @RequiredArgsConstructor
 @Slf4j
 public class WorkflowController {
@@ -41,7 +40,7 @@ public class WorkflowController {
      * 2. Fetch classrooms
      * 3. Send email notification
      */
-    @PostMapping("/workflow/start")
+    @PostMapping("/start")
     public ResponseEntity<LoginResponse> startWorkflow(
             @RequestBody LoginRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
@@ -82,10 +81,11 @@ public class WorkflowController {
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            log.error("Error executing workflow", e);
+            log.error("Error executing login workflow", e);
+            
             LoginResponse errorResponse = LoginResponse.builder()
                     .success(false)
-                    .error("Failed to execute workflow: " + e.getMessage())
+                    .error("Failed to execute login workflow: " + e.getMessage())
                     .build();
             return ResponseEntity.internalServerError().body(errorResponse);
         }
@@ -94,42 +94,56 @@ public class WorkflowController {
     /**
      * Endpoint to query classroom data from a running workflow
      */
-    @GetMapping("/workflow/{workflowId}/classrooms")
+    @GetMapping("/{workflowId}/classrooms")
     public ResponseEntity<ClassroomResponse> getClassrooms(@PathVariable String workflowId) {
         log.info("Received request to query classrooms for workflow ID: {}", workflowId);
         
         try {
+            // Get workflow stub
             LoginWorkflow workflow = workflowClient.newWorkflowStub(LoginWorkflow.class, workflowId);
+            
+            // Query for classroom data
             ClassroomResponse response = workflow.getClassrooms();
+            
             return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            log.error("Error querying classrooms from workflow: {}", e.getMessage());
-            ClassroomResponse errorResponse = ClassroomResponse.builder()
+            log.error("Error querying classrooms from workflow: {}", workflowId, e);
+            
+            return ResponseEntity.internalServerError().body(
+                ClassroomResponse.builder()
                     .success(false)
-                    .error("Failed to query workflow: " + e.getMessage())
-                    .build();
-            return ResponseEntity.internalServerError().body(errorResponse);
+                    .error("Failed to query classrooms: " + e.getMessage())
+                    .build()
+            );
         }
     }
     
     /**
      * Endpoint to query email notification status from a running workflow
      */
-    @GetMapping("/workflow/{workflowId}/email-status")
+    @GetMapping("/{workflowId}/email-status")
     public ResponseEntity<EmailResponse> getEmailStatus(@PathVariable String workflowId) {
         log.info("Received request to query email status for workflow ID: {}", workflowId);
         
         try {
+            // Get workflow stub
             LoginWorkflow workflow = workflowClient.newWorkflowStub(LoginWorkflow.class, workflowId);
+            
+            // Query for email status
             EmailResponse response = workflow.getEmailStatus();
+            
             return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            log.error("Error querying email status from workflow: {}", e.getMessage());
-            EmailResponse errorResponse = EmailResponse.builder()
+            log.error("Error querying email status from workflow: {}", workflowId, e);
+            
+            return ResponseEntity.internalServerError().body(
+                EmailResponse.builder()
                     .success(false)
-                    .error("Failed to query workflow: " + e.getMessage())
-                    .build();
-            return ResponseEntity.internalServerError().body(errorResponse);
+                    .error("Failed to query email status: " + e.getMessage())
+                    .build()
+            );
         }
     }
     

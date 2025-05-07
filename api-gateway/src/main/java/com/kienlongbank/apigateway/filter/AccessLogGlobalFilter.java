@@ -17,13 +17,12 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-        StringBuilder msg = new StringBuilder();
-        msg.append("REQUEST DATA : ")
-           .append("method=").append(request.getMethod())
-           .append(", uri=").append(request.getURI())
-           .append(", clientIp=").append(request.getRemoteAddress())
-           .append(", headers=").append(request.getHeaders());
-        accessLogger.info(msg.toString());
+        String msg = "REQUEST DATA : " +
+                "method=" + request.getMethod() +
+                ", uri=" + request.getURI() +
+                ", clientIp=" + request.getRemoteAddress() +
+                ", headers=" + request.getHeaders();
+        accessLogger.info(msg);
         return chain.filter(exchange);
     }
 

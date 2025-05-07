@@ -1,9 +1,10 @@
 package com.kienlongbank.apigateway.filter;
 
-import com.kienlongbank.apigateway.client.SecurityServiceClient;
+import com.kienlongbank.api.SecurityService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -18,19 +19,23 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
 
 @Component
 @Slf4j
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
-    @Autowired
-    private SecurityServiceClient securityServiceClient;
+
+    @DubboReference(version = "1.0.0", group = "security", check = false, timeout = 5000, retries = 0)
+    private SecurityService securityService;
     
     @Autowired(required = false)
     private MessageSource messageSource;
@@ -40,8 +45,11 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     
     private List<String> excludedPaths;
 
-    public AuthenticationFilter() {
+    private final Tracer tracer;
+
+    public AuthenticationFilter(Tracer tracer) {
         super(Config.class);
+        this.tracer = tracer;
     }
     
     @jakarta.annotation.PostConstruct
@@ -53,115 +61,82 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            ServerHttpRequest request = exchange.getRequest();
-            String path = request.getURI().getPath();
+            return Mono.deferContextual(contextView -> {
+                Span authSpan = tracer.spanBuilder("gateway.auth")
+                    .setParent(Context.current())
+                    .setAttribute("component", "authentication_filter")
+                    .startSpan();
 
-            log.debug("Raw config value: {}", config);
-            log.info("Processing request path: {}, config disabled: {}", path, config.isDisabled());
-            
-            // Log request headers for debugging
-            request.getHeaders().forEach((key, value) -> {
-                log.debug("Request header: {} = {}", key, value);
-            });
+                return Mono.using(
+                    authSpan::makeCurrent,
+                    authScope -> {
+                        ServerHttpRequest request = exchange.getRequest();
+                        String path = request.getURI().getPath();
+                        
+                        authSpan.setAttribute("request.path", path);
+                        
+                        if (config.isDisabled()) {
+                            authSpan.setAttribute("auth.skipped", true);
+                            return chain.filter(exchange);
+                        }
 
-            // Skip authentication if explicitly disabled for this route (e.g., login, register)
-            if (config.isDisabled()) {
-                log.info("Authentication disabled for path via config: {}", path);
-                return chain.filter(exchange);
-            }
+                        if (path.equals("/api/users") && HttpMethod.POST.equals(request.getMethod())) {
+                            authSpan.setAttribute("auth.skipped", "user_creation");
+                            return chain.filter(exchange);
+                        }
+                        
+                        for (String excludedPath : excludedPaths) {
+                            if (path.trim().startsWith(excludedPath.trim())) {
+                                authSpan.setAttribute("auth.skipped", "excluded_path");
+                                return chain.filter(exchange);
+                            }
+                        }
 
-            // Bỏ qua xác thực cho API tạo user mới
-            if (path.equals("/api/users") && HttpMethod.POST.equals(request.getMethod())) {
-                log.info("Skipping authentication for user creation API: {}", path);
-                return chain.filter(exchange);
-            }
-            
-            // Skip authentication for excluded paths
-            for (String excludedPath : excludedPaths) {
-                if (path.trim().startsWith(excludedPath.trim())) {
-                    log.info("Skipping authentication for excluded path: {}", path);
-                    return chain.filter(exchange);
-                }
-            }
+                        if (isSwaggerRequest(path)) {
+                            authSpan.setAttribute("auth.skipped", "swagger");
+                            return chain.filter(exchange);
+                        }
 
-            // Skip authentication for Swagger/OpenAPI
-            if (isSwaggerRequest(path)) {
-                log.info("Skipping authentication for Swagger/OpenAPI path: {}", path);
-                return chain.filter(exchange);
-            }
+                        if (path.startsWith("/api/actuator/")) {
+                            authSpan.setAttribute("auth.skipped", "actuator");
+                            return chain.filter(exchange);
+                        }
 
-            // Thêm điều kiện bỏ qua xác thực cho actuator endpoints
-            if (path.startsWith("/api/actuator/")) {
-                log.info("Skipping authentication for actuator endpoint: {}", path);
-                return chain.filter(exchange);
-            }
+                        String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+                        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                            authSpan.setAttribute("auth.error", "missing_token");
+                            authSpan.setStatus(StatusCode.ERROR);
+                            return onError(exchange);
+                        }
 
-            log.info("Authenticating request for path: {}", path);
+                        String token = authHeader.substring(7);
+                        
+                        Span validateSpan = tracer.spanBuilder("gateway.auth.validate_token")
+                            .setAttribute("token.length", token.length())
+                            .startSpan();
 
-            // Get current locale
-            Locale locale = LocaleContextHolder.getLocale();
-
-            if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
-                log.warn("No Authorization header found for path: {}", path);
-                return onError(exchange, getLocalizedMessage("auth.error.no_token", "No Authorization header"), HttpStatus.UNAUTHORIZED);
-            }
-
-            String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-            String token = authHeader;
-            
-            // Extract token if it contains Bearer prefix
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
-
-            // Validate token with security service
-            log.info("validating token : " + token);
-            boolean isValid = securityServiceClient.validateToken(token);
-            if (!isValid) {
-                log.warn("Invalid or expired token for path: {}", path);
-                return onError(exchange, getLocalizedMessage("auth.error.invalid_token", "Invalid or expired token"), HttpStatus.UNAUTHORIZED);
-            }
-
-            // Check roles if required
-            if (config.getRequiredRoles() != null && !config.getRequiredRoles().isEmpty()) {
-                try {
-                    boolean hasRequiredRole = securityServiceClient.hasAnyRole(token, config.getRequiredRoles());
-                    if (!hasRequiredRole) {
-                        log.warn("User does not have required roles for path: {}", path);
-                        return onError(exchange, getLocalizedMessage("auth.error.forbidden", "Access denied: insufficient permissions"), HttpStatus.FORBIDDEN);
+                        return Mono.using(
+                            validateSpan::makeCurrent,
+                            validationScope -> Mono.fromCallable(() -> securityService.validateToken(token))
+                                .map(isValid -> {
+                                    validateSpan.setAttribute("token.valid", isValid);
+                                    if (!isValid) {
+                                        validateSpan.setStatus(StatusCode.ERROR);
+                                        throw new RuntimeException("Invalid token");
+                                    }
+                                    return true;
+                                })
+                                .then(chain.filter(exchange))
+                                .doFinally(signalType -> validateSpan.end()),
+                                Scope::close
+                        );
+                    },
+                    authScope -> {
+                        authSpan.end();
+                        authScope.close();
                     }
-                    log.info("User has required role for path: {}", path);
-                } catch (Exception e) {
-                    log.error("Error checking roles: {}", e.getMessage());
-                    return onError(exchange, getLocalizedMessage("auth.error.role_verification_failed", "Error verifying user permissions"), HttpStatus.INTERNAL_SERVER_ERROR);
-                }
-            }
-
-            // Get user details and add to headers
-            try {
-                log.info("Token is valid, proceeding with request for path: {}", path);
-                
-                // Add username and roles to headers for downstream services
-                List<String> roles = securityServiceClient.extractRoles(token);
-                log.info("roles : " + roles);
-                String username = securityServiceClient.getUsernameFromToken(token);
-                log.info("username : " + username);
-                if (username == null) {
-                    log.warn("Failed to extract username from token for path: {}", path);
-                    return onError(exchange, getLocalizedMessage("auth.error.invalid_token", "Invalid token"), HttpStatus.UNAUTHORIZED);
-                }
-                
-                // Create a new request with additional headers
-                ServerHttpRequest modifiedRequest = request.mutate()
-                    .header("X-User-Roles", String.join(",", roles))
-                    .header("X-Username", username)
-                    .build();
-                
-                return chain.filter(exchange.mutate().request(modifiedRequest).build());
-            } catch (Exception e) {
-                log.error("Error processing token for path: {}", path, e);
-                return onError(exchange, getLocalizedMessage("api.error.server_error", "Internal server error"), HttpStatus.INTERNAL_SERVER_ERROR);
-            }
+                );
+            });
         };
     }
 
@@ -185,23 +160,20 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                path.contains("api-docs/swagger-config");
     }
 
-    private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
+    private Mono<Void> onError(ServerWebExchange exchange) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(status);
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
         
-        // Set header for json response
         response.getHeaders().add("Content-Type", "application/json");
         
-        // Create error response body
         String errorJson = String.format(
             "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
-            status.value(),
-            status.getReasonPhrase(),
-            message,
+            HttpStatus.UNAUTHORIZED.value(),
+            HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                "No authorization header",
             exchange.getRequest().getURI().getPath()
         );
         
-        // Write error response to body
         return response.writeWith(
             Mono.just(response.bufferFactory().wrap(errorJson.getBytes()))
         );

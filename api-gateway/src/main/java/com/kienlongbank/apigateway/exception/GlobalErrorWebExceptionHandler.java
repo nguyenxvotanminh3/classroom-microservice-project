@@ -71,24 +71,15 @@ public class GlobalErrorWebExceptionHandler extends AbstractErrorWebExceptionHan
     }
     
     private String getErrorMessageKey(HttpStatus status, String errorType) {
-        switch (status) {
-            case UNAUTHORIZED:
-                return "auth.error.unauthorized";
-            case FORBIDDEN:
-                return "auth.error.forbidden";
-            case NOT_FOUND:
-                return "api.error.not_found";
-            case BAD_REQUEST:
-                return "api.error.bad_request";
-            case METHOD_NOT_ALLOWED:
-                return "api.error.method_not_allowed";
-            case SERVICE_UNAVAILABLE:
-                return "gateway.error.service_unavailable";
-            case GATEWAY_TIMEOUT:
-                return "gateway.error.timeout";
-            case INTERNAL_SERVER_ERROR:
-            default:
-                return "api.error.server_error";
-        }
+        return switch (status) {
+            case UNAUTHORIZED -> "auth.error.unauthorized";
+            case FORBIDDEN -> "auth.error.forbidden";
+            case NOT_FOUND -> "api.error.not_found";
+            case BAD_REQUEST -> "api.error.bad_request";
+            case METHOD_NOT_ALLOWED -> "api.error.method_not_allowed";
+            case SERVICE_UNAVAILABLE -> "gateway.error.service_unavailable";
+            case GATEWAY_TIMEOUT -> "gateway.error.timeout";
+            default -> "api.error.server_error";
+        };
     }
 } 
