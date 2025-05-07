@@ -21,7 +21,7 @@ import reactor.core.publisher.Mono;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
+
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
@@ -104,7 +104,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
                             authSpan.setAttribute("auth.error", "missing_token");
                             authSpan.setStatus(StatusCode.ERROR);
-                            return onError(exchange, "No authorization header", HttpStatus.UNAUTHORIZED);
+                            return onError(exchange);
                         }
 
                         String token = authHeader.substring(7);
@@ -126,7 +126,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                                 })
                                 .then(chain.filter(exchange))
                                 .doFinally(signalType -> validateSpan.end()),
-                            validationScope -> validationScope.close()
+                                Scope::close
                         );
                     },
                     authScope -> {
@@ -158,17 +158,17 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                path.contains("api-docs/swagger-config");
     }
 
-    private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
+    private Mono<Void> onError(ServerWebExchange exchange) {
         ServerHttpResponse response = exchange.getResponse();
-        response.setStatusCode(status);
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
         
         response.getHeaders().add("Content-Type", "application/json");
         
         String errorJson = String.format(
             "{\"status\":%d,\"error\":\"%s\",\"message\":\"%s\",\"path\":\"%s\"}",
-            status.value(),
-            status.getReasonPhrase(),
-            message,
+            HttpStatus.UNAUTHORIZED.value(),
+            HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                "No authorization header",
             exchange.getRequest().getURI().getPath()
         );
         
