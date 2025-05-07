@@ -8,6 +8,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 @Builder
 @Data
@@ -22,5 +25,17 @@ public class UserMapper {
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
+    }
+
+
+    public Map<String, Object> convertUserToMap(User user) {
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", user.getId());
+        userMap.put("username", user.getUsername());
+        userMap.put("fullName", user.getFullName());
+        userMap.put("email", user.getEmail());
+        userMap.put("password", user.getPassword());
+        userMap.put("active", user.isActive());
+        return userMap;
     }
 }

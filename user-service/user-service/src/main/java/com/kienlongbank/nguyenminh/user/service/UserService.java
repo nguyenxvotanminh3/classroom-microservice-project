@@ -19,5 +19,4 @@ public interface UserService {
     @Retry(name = "order-api")
     @RateLimiter(name = "order-api")
     UserResponseLogin findByUsername(String userName, String token);
-
 }

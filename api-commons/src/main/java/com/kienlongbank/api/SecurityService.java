@@ -16,7 +16,6 @@ public interface SecurityService {
      * @return A map containing the token and user details
      */
     Map<String, Object> authenticate(String username, String password);
-    
     /**
      * Validate a JWT token
      * 
@@ -24,7 +23,6 @@ public interface SecurityService {
      * @return true if the token is valid, false otherwise
      */
     boolean validateToken(String token);
-    
     /**
      * Get user details from a JWT token
      * 

@@ -1,6 +1,7 @@
 package com.kienlongbank.nguyenminh.user.service.impl;
 
 import com.kienlongbank.api.UserService;
+import com.kienlongbank.nguyenminh.user.mapper.UserMapper;
 import com.kienlongbank.nguyenminh.user.model.User;
 import com.kienlongbank.nguyenminh.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +16,13 @@ import java.util.Optional;
 
 @DubboService(version = "1.0.0", group = "user", timeout = 10000)
 @Slf4j
+
 public class UserDubboServiceImpl implements UserService {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private UserMapper mapper;
 
     @Override
     public Map<String, Object> getUserById(Long userId) {
@@ -27,7 +31,7 @@ public class UserDubboServiceImpl implements UserService {
             Optional<User> optionalUser = userRepository.findById(userId);
             if (optionalUser.isPresent()) {
                 User user = optionalUser.get();
-                return convertUserToMap(user);
+                return mapper.convertUserToMap(user);
             } else {
                 log.warn("Dubbo: User not found with ID: {}", userId);
                 Map<String, Object> errorMap = new HashMap<>();
@@ -50,7 +54,7 @@ public class UserDubboServiceImpl implements UserService {
             List<Map<String, Object>> result = new ArrayList<>();
             
             for (User user : users) {
-                result.add(convertUserToMap(user));
+                result.add(mapper.convertUserToMap(user));
             }
             
             return result;
@@ -78,7 +82,7 @@ public class UserDubboServiceImpl implements UserService {
             Optional<User> optionalUser = userRepository.findByUsername(username);
             if (optionalUser.isPresent()) {
                 User user = optionalUser.get();
-                return convertUserToMap(user);
+                return mapper.convertUserToMap(user);
             } else {
                 log.warn("Dubbo: User not found with username: {}", username);
                 Map<String, Object> errorMap = new HashMap<>();
@@ -114,14 +118,5 @@ public class UserDubboServiceImpl implements UserService {
         }
     }
 
-    private Map<String, Object> convertUserToMap(User user) {
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", user.getId());
-        userMap.put("username", user.getUsername());
-        userMap.put("fullName", user.getFullName());
-        userMap.put("email", user.getEmail());
-        userMap.put("password", user.getPassword());
-        userMap.put("active", user.isActive());
-        return userMap;
-    }
+
 } 
