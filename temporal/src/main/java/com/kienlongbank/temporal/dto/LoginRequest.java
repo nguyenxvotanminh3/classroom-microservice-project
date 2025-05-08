@@ -14,6 +14,6 @@ public class LoginRequest {
     private String userName;
     private String password;
     
-    @JsonIgnore // Don't serialize this field when sending to client
+    @JsonIgnore
     private String locale;
 } 

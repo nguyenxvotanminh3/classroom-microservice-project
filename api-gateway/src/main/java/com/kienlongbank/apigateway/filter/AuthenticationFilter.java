@@ -54,8 +54,22 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     
     @jakarta.annotation.PostConstruct
     public void init() {
-        this.excludedPaths = Arrays.asList(excludedPathsString.split(","));
-        log.info("Excluded paths for authentication: {}", excludedPaths);
+        Span span = tracer.spanBuilder("gateway.auth.init")
+            .setAttribute("component", "authentication_filter")
+            .startSpan();
+        
+        try (Scope scope = span.makeCurrent()) {
+            this.excludedPaths = Arrays.asList(excludedPathsString.split(","));
+            log.info("Excluded paths for authentication: {}", excludedPaths);
+            span.setAttribute("excluded_paths.count", excludedPaths.size());
+            span.setAttribute("excluded_paths", excludedPathsString);
+        } catch (Exception e) {
+            span.recordException(e);
+            span.setStatus(StatusCode.ERROR);
+            throw e;
+        } finally {
+            span.end();
+        }
     }
 
     @Override
@@ -163,23 +177,50 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
     }
 
     private String getLocalizedMessage(String key, String defaultMessage) {
-        if (messageSource != null) {
-            try {
-                return messageSource.getMessage(key, null, defaultMessage, LocaleContextHolder.getLocale());
-            } catch (Exception e) {
-                return defaultMessage;
+        Span span = tracer.spanBuilder("gateway.auth.getLocalizedMessage")
+            .setAttribute("message.key", key)
+            .setAttribute("message.default", defaultMessage)
+            .startSpan();
+        
+        try (Scope scope = span.makeCurrent()) {
+            if (messageSource != null) {
+                try {
+                    String message = messageSource.getMessage(key, null, defaultMessage, LocaleContextHolder.getLocale());
+                    span.setAttribute("message.resolved", message);
+                    span.setAttribute("message.locale", LocaleContextHolder.getLocale().toString());
+                    return message;
+                } catch (Exception e) {
+                    span.recordException(e);
+                    span.setStatus(StatusCode.ERROR);
+                    span.setAttribute("message.error", e.getMessage());
+                    return defaultMessage;
+                }
             }
+            span.setAttribute("message.source", "not_available");
+            return defaultMessage;
+        } finally {
+            span.end();
         }
-        return defaultMessage;
     }
 
     private boolean isSwaggerRequest(String path) {
-        return path.contains("/v3/api-docs") || 
-               path.contains("/swagger-ui") || 
-               path.contains("/swagger-ui.html") ||
-               path.contains("/webjars/") ||
-               path.endsWith("/api-docs") ||
-               path.contains("api-docs/swagger-config");
+        Span span = tracer.spanBuilder("gateway.auth.isSwaggerRequest")
+            .setAttribute("request.path", path)
+            .startSpan();
+        
+        try (Scope scope = span.makeCurrent()) {
+            boolean isSwagger = path.contains("/v3/api-docs") || 
+                   path.contains("/swagger-ui") || 
+                   path.contains("/swagger-ui.html") ||
+                   path.contains("/webjars/") ||
+                   path.endsWith("/api-docs") ||
+                   path.contains("api-docs/swagger-config");
+            
+            span.setAttribute("is_swagger_request", isSwagger);
+            return isSwagger;
+        } finally {
+            span.end();
+        }
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String errorMessage) {
