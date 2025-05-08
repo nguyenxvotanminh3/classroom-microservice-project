@@ -1,6 +1,7 @@
-package com.kienlongbank.classroomservice.model;
+package com.kienlongbank.classroomservice.handler;
 
 import com.kienlongbank.api.SecurityService;
+import com.kienlongbank.classroomservice.model.CustomRevisionEntity;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.hibernate.envers.RevisionListener;
@@ -30,7 +31,7 @@ public class CustomRevisionListener implements RevisionListener {
                 try {
                     log.debug("Extracting username from token: {}", token.substring(0, Math.min(20, token.length())));
                     
-                    // Sử dụng getUserDetailsFromToken thay vì getUsernameFromToken
+
                     Map<String, Object> userDetails = securityService.getUserDetailsFromToken(token);
                     
                     if (userDetails != null && userDetails.containsKey("username")) {
