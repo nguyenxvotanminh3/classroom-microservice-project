@@ -72,7 +72,7 @@ public class GatewayRouteConfig {
             .route("user-create", r -> r.path("/user-api/users")
                 .and().method(HttpMethod.POST)
                 .filters(f -> f
-                    .filter(authenticationFilter.apply(createRoleConfig("ADMIN")))
+                    .filter(authenticationFilter.apply(createDisabledConfig()))
                     .rewritePath("/user-api/(?<segment>.*)", "/api/${segment}"))
                 .uri("http://localhost:8080"))
                 
@@ -89,7 +89,7 @@ public class GatewayRouteConfig {
                     .filter(authenticationFilter.apply(createRoleConfig("ADMIN")))
                     .rewritePath("/user-api/(?<segment>.*)", "/api/${segment}"))
                 .uri("http://localhost:8080"))
-                
+
             // General User Service Route (catch-all)
             .route("user-other", r -> r.path("/user-api/**")
                 .filters(f -> f
