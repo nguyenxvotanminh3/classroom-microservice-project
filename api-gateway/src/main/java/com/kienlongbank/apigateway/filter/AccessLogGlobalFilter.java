@@ -40,7 +40,10 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger("ACCESS_LOG");
     private static final Logger errorLog = LoggerFactory.getLogger(AccessLogGlobalFilter.class);
     private static final int MAX_BODY_SIZE = 1024 * 1024; // 1MB limit
-    private static final int MAX_ARRAY_ELEMENTS = 3; // Maximum number of array elements to show
+    private static final int MAX_ARRAY_ELEMENTS = 3;
+    // Maximum number of array elements to show
+    public static final String LIMITED_STRING = "... and %d more items (showing first %d of %d)";
+    public static final String HEADER_NAME = "X-Forwarded-For";
     private final ObjectMapper objectMapper;
 
     /**
@@ -87,7 +90,7 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
                             limitedArray.add(arrayNode.get(i));
                         }
                         ObjectNode moreInfo = objectMapper.createObjectNode();
-                        moreInfo.put("note", String.format("... and %d more items (showing first %d of %d)", 
+                        moreInfo.put("note", String.format(LIMITED_STRING,
                             arrayNode.size() - MAX_ARRAY_ELEMENTS, MAX_ARRAY_ELEMENTS, arrayNode.size()));
                         limitedArray.add(moreInfo);
                         objectNode.set(fieldName, limitedArray);
@@ -234,7 +237,7 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
      * Extract client IP address from request headers or remote address
      */
     private String getClientIp(ServerHttpRequest request) {
-        String forwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
+        String forwardedFor = request.getHeaders().getFirst(HEADER_NAME);
         if (forwardedFor != null && !forwardedFor.isEmpty()) {
             return forwardedFor;
         }
