@@ -137,6 +137,23 @@ services:
     depends_on:
       - temporal
 
+  # --- K6 Performance Testing Service ---
+  k6:
+    image: grafana/k6:latest
+    networks:
+      - app-network
+    volumes:
+      - ./k6-scripts:/scripts
+      - ./results:/results
+    environment:
+      - K6_OUT=json=/results/result.json
+    # Sử dụng entrypoint và command đúng để giữ container chạy
+    entrypoint: /bin/sh
+    command: -c "while true; do sleep 30; done"
+    # Thêm extra_hosts để đảm bảo host.docker.internal phân giải được
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 networks:
   app-network:
     driver: bridge

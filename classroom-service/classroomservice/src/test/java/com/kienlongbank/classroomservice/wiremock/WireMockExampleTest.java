@@ -1,10 +1,18 @@
+
 package com.kienlongbank.classroomservice.wiremock;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.kienlongbank.classroomservice.config.WireMockConfig;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import org.springframework.beans.factory.annotation.Value;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.kienlongbank.classroomservice.config.BaseTestConfig;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import com.kienlongbank.classroomservice.config.WireMockConfig;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +28,8 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@Import({WireMockExampleTest.WireMockConfiguration.class, WireMockConfig.class})
 @ActiveProfiles("test")
 public class WireMockExampleTest {
 
@@ -29,10 +37,14 @@ public class WireMockExampleTest {
     private WireMockServer wireMockServer;
 
     @Autowired
+private WireMockConfig wireMockConfig;
+
+    @Autowired
     private RestTemplate restTemplate;
 
     @BeforeEach
     void setUp() {
+        wireMockServer.start();
         wireMockServer.resetAll();
     }
 
@@ -100,7 +112,10 @@ public class WireMockExampleTest {
         long duration = endTime - startTime;
         assert(duration >= 2000);
     }
-
+    @AfterEach
+    void tearDown() {
+        wireMockServer.stop();
+    }
     @Test
     void testRequestWithHeaders() {
         // Given
@@ -135,5 +150,15 @@ public class WireMockExampleTest {
         } catch (Exception e) {
             assertEquals(401, ((org.springframework.web.client.HttpClientErrorException) e).getRawStatusCode());
         }
+}
+
+@Configuration
+static class WireMockConfiguration {
+    @Bean
+    public WireMockServer wireMockServer() {
+        return new WireMockServer();
     }
-} 
+}
+}
+
+

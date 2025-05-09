@@ -3,6 +3,7 @@ package com.kienlongbank.classroomservice.config;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.ActiveProfiles;
@@ -16,12 +17,14 @@ public class WireMockConfig {
     private Integer port;
 
     @Bean(initMethod = "start", destroyMethod = "stop")
+    @ConditionalOnMissingBean
     public WireMockServer wireMockServer() {
         WireMockServer server = new WireMockServer(WireMockConfiguration.options().port(port));
         return server;
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public RestTemplate restTemplate() {
         return new RestTemplate();
     }

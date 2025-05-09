@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K6 Performance Testing</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <!-- Chart.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --sidebar-width: 250px;
+        }
+        
+        body {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        
+        .sidebar {
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,.8);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            margin: 0.2rem 1rem;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: white;
+            background: rgba(255,255,255,.1);
+        }
+        
+        .sidebar .nav-link i {
+            width: 20px;
+            text-align: center;
+            margin-right: 0.5rem;
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            transition: all 0.3s;
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+        
+        .navbar {
+            margin-left: var(--sidebar-width);
+            transition: all 0.3s;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+            background: #fff;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            border-radius: 0.75rem 0.75rem 0 0 !important;
+            border-bottom: none;
+            padding: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: calc(var(--sidebar-width) * -1);
+            }
+            
+            .sidebar.active {
+                margin-left: 0;
+            }
+            
+            .main-content,
+            .navbar {
+                margin-left: 0;
+            }
+            
+            .main-content.active,
+            .navbar.active {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        /* CodeMirror customization */
+        .CodeMirror {
+            height: 400px;
+            border-radius: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+        }
+        
+        /* K6 Test specific styles */
+        .k6-result-card {
+            transition: all 0.3s ease;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .template-item {
+            cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .template-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+        }
+        
+        .spinner-border {
+            display: inline-block;
+            width: 3rem;
+            height: 3rem;
+            vertical-align: text-bottom;
+            border: 0.25em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border 0.75s linear infinite;
+        }
+        
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+        
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+            50% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="p-3">
+            <div class="d-flex align-items-center mb-4">
+                <i class="fas fa-bolt fa-2x me-3"></i>
+                <h4 class="mb-0">Circuit Breaker</h4>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link" href="index.html">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <!-- <li class="nav-item">
+                    <a class="nav-link" href="#stressTest">
+                        <i class="fas fa-burn"></i>
+                        Stress Test
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#loadTest">
+                        <i class="fas fa-weight-hanging"></i>
+                        Load Test
+                    </a>
+                </li> -->
+                <li class="nav-item">
+                    <a class="nav-link active" href="k6-tests.html">
+                        <i class="fas fa-chart-line"></i>
+                        K6 Performance Tests
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#settings">
+                        <i class="fas fa-cogs"></i>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container-fluid">
+            <button id="sidebarToggle" class="btn btn-link d-md-none">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="d-flex align-items-center">
+                <button type="button" id="runK6Test" class="btn btn-primary me-2">
+                    <i class="fas fa-play me-2"></i>Run Test
+                </button>
+                <button type="button" id="saveK6Script" class="btn btn-outline-secondary">
+                    <i class="fas fa-save me-2"></i>Save Script
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="mb-3"><i class="fas fa-chart-line me-2"></i>K6 Performance Testing</h2>
+                <p class="text-muted">
+                    Chạy kiểm thử hiệu năng với K6 và xem kết quả theo thời gian thực. Bạn có thể chỉnh sửa script, cấu hình các tham số và chạy kiểm thử trực tiếp từ giao diện này.
+                </p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- K6 Script Editor -->
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="fas fa-code me-2"></i>K6 Test Script</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="templateDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-file-code me-1"></i>Templates
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="templateDropdown">
+                                    <li><a class="dropdown-item template-selector" data-template="custom-test" href="#">Custom Test</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item template-selector" data-template="load-test" href="#">Load Test</a></li>
+                                    <li><a class="dropdown-item template-selector" data-template="stress-test" href="#">Stress Test</a></li>
+                                    <li><a class="dropdown-item template-selector" data-template="spike-test" href="#">Spike Test</a></li>
+                                    <li><a class="dropdown-item template-selector" data-template="soak-test" href="#">Soak Test</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item template-selector" data-template="circuit-breaker" href="#">Circuit Breaker Test</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <textarea id="k6Script"></textarea>
+                    </div>
+                </div>
+
+                <!-- Test Configuration -->
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Test Configuration</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="testDuration" class="form-label">Test Duration (seconds)</label>
+                                    <input type="number" class="form-control" id="testDuration" value="60" min="1" max="600">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="vus" class="form-label">Virtual Users</label>
+                                    <input type="number" class="form-control" id="vus" value="20" min="1" max="1000">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="rampupTime" class="form-label">Ramp-up Time (seconds)</label>
+                                    <input type="number" class="form-control" id="rampupTime" value="5" min="0" max="600">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- Trống để cân đối layout -->
+                            </div>
+                        </div>
+                        <!-- Thêm thông báo nhỏ giải thích -->
+                        <div class="alert alert-info">
+                            <small><i class="fas fa-info-circle me-1"></i> URL endpoints đã được cấu hình sẵn trong script test</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="col-lg-5">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Test Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultsPlaceholder" class="text-center p-5 text-muted">
+                            <i class="fas fa-chart-line fa-3x mb-3"></i>
+                            <p>Run a test to see results here</p>
+                        </div>
+                        <div id="resultsContent" style="display: none;">
+                            <!-- Summary Stats Cards -->
+                            <div class="row mb-4">
+                                <div class="col-md-6 mb-3">
+                                    <div class="card k6-result-card bg-light">
+                                        <div class="card-body text-center">
+                                            <div class="metric-value text-success" id="successRate">0%</div>
+                                            <div class="metric-label">Success Rate</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card k6-result-card bg-light">
+                                        <div class="card-body text-center">
+                                            <div class="metric-value" id="avgResponseTime">0ms</div>
+                                            <div class="metric-label">Avg Response Time</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card k6-result-card bg-light">
+                                        <div class="card-body text-center">
+                                            <div class="metric-value" id="rps">0</div>
+                                            <div class="metric-label">Requests/sec</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card k6-result-card bg-light">
+                                        <div class="card-body text-center">
+                                            <div class="metric-value" id="totalRequests">0</div>
+                                            <div class="metric-label">Total Requests</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Charts -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Response Time</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="responseTimeChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Requests per Second</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="rpsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Detailed stats table -->
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Metric</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="metricsTableBody">
+                                        <!-- Metrics will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4 class="mb-2">Running K6 Performance Test</h4>
+        <div id="loadingStatus" class="text-center">Initializing test...</div>
+    </div>
+
+    <!-- Libraries and Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/k6-testing.js"></script>
+    <script>
+        // Toggle sidebar on mobile
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.querySelector('.main-content').classList.toggle('active');
+            document.querySelector('.navbar').classList.toggle('active');
+        });
+    </script>
+</body>
+</html> 

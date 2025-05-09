@@ -1,6 +1,7 @@
 package com.kienlongbank.classroomservice.service.impl;
 
 
+import com.kienlongbank.api.UserService;
 import com.kienlongbank.classroomservice.client.UserServiceClient;
 import com.kienlongbank.classroomservice.dto.ClassroomRequest;
 import com.kienlongbank.classroomservice.dto.ClassroomResponse;
@@ -8,6 +9,7 @@ import com.kienlongbank.classroomservice.exception.ClassroomException;
 import com.kienlongbank.classroomservice.model.Classroom;
 import com.kienlongbank.classroomservice.repository.ClassroomRepository;
 import com.kienlongbank.classroomservice.service.ClassroomService;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,16 +70,12 @@ public class ClassroomServiceImpl implements ClassroomService {
     @Transactional(readOnly = true)
     public ClassroomResponse getClassroomById(Long id) {
         log.info("🔍 DATABASE: Fetching classroom with ID {} from database", id);
-        Object classroomObj = classroomRepository.findById(id)
+        Classroom classroomObj = classroomRepository.findById(id)
                 .orElseThrow(() -> new ClassroomException("Classroom not found with id: " + id));
-        if (classroomObj instanceof ClassroomResponse) {
-            return (ClassroomResponse) classroomObj;
-        } else if (classroomObj instanceof java.util.LinkedHashMap) {
-            return objectMapper.convertValue(classroomObj, ClassroomResponse.class);
-        } else if (classroomObj instanceof Classroom) {
-            return convertToClassroomResponse((Classroom) classroomObj);
+        if (classroomObj != null) {
+            return convertToClassroomResponse(classroomObj);
         } else {
-            throw new ClassroomException("Cannot convert classroom object to ClassroomResponse: " + (classroomObj != null ? classroomObj.getClass().getName() : "null"));
+            throw new ClassroomException("Cannot convert classroom object to ClassroomResponse: " + "null");
         }
     }
 

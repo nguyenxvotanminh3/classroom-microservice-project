@@ -51,9 +51,10 @@ public class AuthenticateService {
 
 
     public ResponseEntity<?> authenticateUser(LoginRequest loginRequest, Locale locale) {
+        log.info("Authentication request for user: {}", loginRequest.getUserName());
         try {
             // Manual check for emergency user
-            if (userDetailsService instanceof UserDetailsServiceImpl) {
+            try {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(loginRequest.getUserName());
                 
                 // If emergency user, manually verify password
@@ -66,10 +67,24 @@ public class AuthenticateService {
                     String roles = userDetails.getAuthorities().stream()
                             .map(GrantedAuthority::getAuthority)
                             .collect(Collectors.joining(","));
-                    String msg = messageSource.getMessage("login.success", null, locale);
-                    userService.getUserByName(loginRequest.getUserName());
-                    // Get user email (emergency user might not have an email in the database)
-                    String email = userService.getUserEmailByName(loginRequest.getUserName()); // Default email for emergency user
+                    
+                    String msg;
+                    try {
+                        msg = messageSource.getMessage("login.success", null, "Login successful", locale);
+                    } catch (Exception e) {
+                        log.warn("Could not load message 'login.success': {}", e.getMessage());
+                        msg = "Login successful";
+                    }
+                    
+                    // Get user email
+                    String email = "";
+                    try {
+                        email = userService.getUserEmailByName(loginRequest.getUserName());
+                        log.info("Retrieved email: {}", email);
+                    } catch (Exception e) {
+                        log.error("Error getting user email: {}", e.getMessage());
+                        email = username + "@example.com"; // Fallback
+                    }
 
                     Map<String, Object> response = new HashMap<>();
                     response.put("token", jwt);
@@ -80,16 +95,29 @@ public class AuthenticateService {
                     response.put("success", true);
                     response.put("email", email);
                     return ResponseEntity.ok(response);
+                } else {
+                    log.warn("Password verification failed for emergency user: {}", loginRequest.getUserName());
+                    // Fall through to standard authentication
                 }
+            } catch (Exception e) {
+                log.error("Error during emergency user authentication: {}", e.getMessage());
+                // Fall through to standard authentication
             }
             
             // Standard authentication if not emergency user or emergency authentication failed
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginRequest.getUserName(), loginRequest.getPassword())
-            );
+            Authentication authentication;
+            try {
+                authentication = authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(loginRequest.getUserName(), loginRequest.getPassword())
+                );
+            } catch (AuthenticationException e) {
+                log.error("Standard authentication failed: {}", e.getMessage());
+                throw e; // Re-throw for consistent error handling
+            }
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            log.info("user " + loginRequest.getUserName() + "pass " + loginRequest.getPassword());
+            log.info("User {} authenticated successfully", loginRequest.getUserName());
+            
             // Lấy thông tin UserDetails từ authentication
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
@@ -99,7 +127,14 @@ public class AuthenticateService {
             String roles = userDetails.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .collect(Collectors.joining(","));
-            String msg = messageSource.getMessage("login.success", null, locale);
+            
+            String msg;
+            try {
+                msg = messageSource.getMessage("login.success", null, "Login successful", locale);
+            } catch (Exception e) {
+                log.warn("Could not load message 'login.success': {}", e.getMessage());
+                msg = "Login successful";
+            }
             
             // Get user email from UserService
             String email = "";
@@ -125,7 +160,14 @@ public class AuthenticateService {
             return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
             log.error("Authentication failed: {}", e.getMessage(), e);
-            String msg = messageSource.getMessage("login.failed", null, locale);
+            String msg;
+            try {
+                msg = messageSource.getMessage("login.failed", null, "Invalid username or password", locale);
+            } catch (Exception ex) {
+                log.warn("Could not load message 'login.failed': {}", ex.getMessage());
+                msg = "Invalid username or password";
+            }
+            
             Map<String, Object> response = new HashMap<>();
             response.put("token", null);
             response.put("userName", null);
@@ -136,10 +178,12 @@ public class AuthenticateService {
             response.put("email", null);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            log.error("Unexpected error during authentication: {}", e.getMessage(), e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "An unexpected error occurred. Please try again later.");
+            response.put("success", false);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
-
-
 
 }

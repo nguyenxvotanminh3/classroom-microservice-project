@@ -85,7 +85,7 @@ public class LoginWorkflowImpl implements LoginWorkflow {
                 // If login is successful, fetch the classroom data
                 this.cachedClassroomResponse = fetchClassroomData();
                 
-                // Đảm bảo luôn gửi email nếu có dữ liệu classroom, bất kể success là true/false
+
                 if (this.cachedClassroomResponse != null && this.cachedClassroomResponse.getData() != null) {
                     Workflow.getLogger(this.getClass()).info("Classroom data found, attempting to send email notification now...");
                     this.cachedEmailResponse = sendEmailNotification();
