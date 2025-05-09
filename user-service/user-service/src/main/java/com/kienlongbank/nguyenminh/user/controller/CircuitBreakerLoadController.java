@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequestMapping("/circuit-breaker-load")
 @RequiredArgsConstructor
 @Slf4j
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class CircuitBreakerLoadController {
 
     private final UserService userService;

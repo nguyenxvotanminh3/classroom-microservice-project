@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequestMapping("/circuit-breaker-test")
 @RequiredArgsConstructor
 @Slf4j
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class CircuitBreakerTestController {
 
     private final UserService userService;
@@ -46,9 +47,8 @@ public class CircuitBreakerTestController {
                 concurrentRequests, includeDuplicates);
         
         // Create a template user to duplicate if needed
-        UserRequest template;
-        if (includeDuplicates) {
-            template = createRandomUserRequest();
+        final UserRequest template = includeDuplicates ? createRandomUserRequest() : null;
+        if (includeDuplicates && template != null) {
             // First request should succeed
             try {
                 userService.createUser(template);
@@ -58,10 +58,8 @@ public class CircuitBreakerTestController {
                 failureCounter.incrementAndGet();
                 log.error("Failed to create template user: {}", e.getMessage());
             }
-        } else {
-            template = null;
         }
-
+        
         // Launch concurrent requests
         for (int i = 0; i < concurrentRequests; i++) {
             final int requestNumber = i;
@@ -70,7 +68,7 @@ public class CircuitBreakerTestController {
                     UserRequest userRequest;
                     
                     // Either use duplicate user data or generate random user
-                    if (includeDuplicates && requestNumber % 2 == 0) {
+                    if (includeDuplicates && requestNumber % 2 == 0 && template != null) {
                         // Create duplicate to force failure every second request
                         userRequest = new UserRequest(
                                 template.getUsername(),

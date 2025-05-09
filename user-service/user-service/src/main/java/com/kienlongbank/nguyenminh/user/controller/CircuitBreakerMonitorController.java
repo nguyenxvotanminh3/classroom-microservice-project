@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.CrossOrigin;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/circuit-breaker-monitor")
 @RequiredArgsConstructor
 @Slf4j
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class CircuitBreakerMonitorController {
 
     private final CircuitBreakerRegistry circuitBreakerRegistry;

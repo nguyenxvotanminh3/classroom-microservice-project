@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuit Breaker Monitor</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --sidebar-width: 250px;
+            --card-min-height: 160px;
+        }
+        
+        body {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        
+        .sidebar {
+            width: var(--sidebar-width);
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,.8);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            margin: 0.2rem 1rem;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: white;
+            background: rgba(255,255,255,.1);
+        }
+        
+        .sidebar .nav-link i {
+            width: 20px;
+            text-align: center;
+            margin-right: 0.5rem;
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            transition: all 0.3s;
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+        
+        .navbar {
+            margin-left: var(--sidebar-width);
+            transition: all 0.3s;
+        }
+        
+        .card {
+            position: relative;
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+            background: #fff;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        
+        .card-header {
+            border-radius: 0.75rem 0.75rem 0 0 !important;
+            border-bottom: none;
+        }
+        
+        .hover-card {
+            transition: all 0.3s ease;
+        }
+        
+        .hover-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+        }
+        
+        .active-card {
+            border: 2px solid var(--bs-primary);
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: calc(var(--sidebar-width) * -1);
+            }
+            
+            .sidebar.active {
+                margin-left: 0;
+            }
+            
+            .main-content,
+            .navbar {
+                margin-left: 0;
+            }
+            
+            .main-content.active,
+            .navbar.active {
+                margin-left: var(--sidebar-width);
+            }
+        }
+        
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 500;
+        }
+        
+        .refresh-btn {
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+        }
+        
+        .progress {
+            height: 0.5rem;
+            border-radius: 1rem;
+        }
+        
+        .circuit-breaker-card {
+            min-height: var(--card-min-height);
+            height: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        .circuit-breaker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .metrics-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .metrics-label {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        
+        .status-closed { background-color: #28a745; }
+        .status-open { background-color: #dc3545; }
+        .status-half-open { background-color: #ffc107; }
+        
+        .circuit-breaker-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .circuit-breaker-content {
+            padding: 1rem;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        
+        .metric-item {
+            text-align: center;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            background: #f8f9fa;
+        }
+
+        /* Custom colors for circuit breaker states */
+        .bg-success { background-color: #28a745 !important; }
+        .bg-danger { background-color: #dc3545 !important; }
+        .bg-warning { background-color: #ffc107 !important; }
+        .bg-info { background-color: #17a2b8 !important; }
+        .bg-secondary { background-color: #6c757d !important; }
+        
+        /* Color definitions for direct use in inline styles */
+        .color-success { color: #28a745; }
+        .color-danger { color: #dc3545; }
+        .color-warning { color: #ffc107; }
+        .color-info { color: #17a2b8; }
+        .color-secondary { color: #6c757d; }
+        
+        /* Fix for circuit breaker card display */
+        #circuitBreakerGrid {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -0.75rem;
+            margin-left: -0.75rem;
+        }
+        
+        .col-xl-3, .col-lg-4, .col-md-6 {
+            padding: 0.75rem;
+        }
+
+        /* Add responsive container for pre elements */
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        /* Ensure form elements don't overflow */
+        form {
+            max-width: 100%;
+        }
+
+        input, button {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="p-3">
+            <div class="d-flex align-items-center mb-4">
+                <i class="fas fa-bolt fa-2x me-3"></i>
+                <h4 class="mb-0">Circuit Breaker</h4>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="#monitor">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="k6-tests.html">
+                        <i class="fas fa-chart-line"></i>
+                        K6 Performance Tests
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#loadTest">
+                        <i class="fas fa-weight-hanging"></i>
+                        Load Test
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#settings">
+                        <i class="fas fa-cogs"></i>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container-fluid">
+            <button id="sidebarToggle" class="btn btn-link d-md-none">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="d-flex align-items-center">
+                <button type="button" id="refreshStatus" class="btn btn-primary refresh-btn">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Circuit Breaker Status Panel -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="circuit-breaker-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-microchip me-2"></i>Circuit Breakers
+                        </h5>
+                        <button type="button" id="refreshStatus" class="btn btn-primary btn-sm">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                        </button>
+                    </div>
+                    <div class="card-body p-0 position-relative">
+                        <div class="loading-overlay">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <div id="circuitBreakerList" class="circuit-breaker-grid">
+                            <!-- Circuit breaker cards will be dynamically inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Circuit Breaker Details -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>Circuit Breaker Details
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="circuitBreakerDetails">
+                            <p class="text-center text-muted">Select a circuit breaker to view details</p>
+                        </div>
+                        
+                        <!-- Control Panel -->
+                        <div class="mt-4">
+                            <h5 class="mb-3"><i class="fas fa-sliders-h me-2"></i>Circuit Breaker Controls</h5>
+                            <div class="card shadow-sm">
+                                <div class="card-body">
+                                    <form id="forceStateForm" class="mb-3">
+                                        <div class="row">
+                                            <div class="col-md-5">
+                                                <div class="mb-3">
+                                                    <label for="circuitBreakerName" class="form-label">Circuit Breaker</label>
+                                                    <select id="circuitBreakerName" class="form-select" required>
+                                                        <option value="">Select a circuit breaker</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="circuitBreakerState" class="form-label">Target State</label>
+                                                    <select id="circuitBreakerState" class="form-select" required>
+                                                        <option value="CLOSED">CLOSED</option>
+                                                        <option value="OPEN">OPEN</option>
+                                                        <option value="HALF_OPEN">HALF_OPEN</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label class="form-label d-block">&nbsp;</label>
+                                                    <button type="submit" id="forceState" class="btn btn-primary w-100">
+                                                        <i class="fas fa-bolt me-1"></i>Force State
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    <div class="d-grid">
+                                        <button id="resetMetrics" class="btn btn-outline-secondary">
+                                            <i class="fas fa-redo-alt me-1"></i>Reset Metrics
+                                        </button>
+                                    </div>
+                                    <div id="controlResults" class="mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Panels -->
+        <div class="row g-4">
+            <!-- Stress Test Panel -->
+            <div class="col-md-6" id="stressTest">
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 text-warning">
+                            <i class="fas fa-burn me-2"></i>Stress Test
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="stressTestForm">
+                            <div class="mb-3">
+                                <label for="concurrentRequests" class="form-label">Concurrent Requests</label>
+                                <input type="number" class="form-control" id="concurrentRequests" value="20" min="1" max="100">
+                            </div>
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="includeDuplicates">
+                                <label class="form-check-label" for="includeDuplicates">Include Duplicates</label>
+                            </div>
+                            <button type="submit" class="btn btn-warning" id="runStressTest">
+                                <i class="fas fa-play me-1"></i>Run Stress Test
+                            </button>
+                        </form>
+                        <div class="mt-3">
+                            <div class="card bg-light">
+                                <div class="card-header">Results</div>
+                                <div class="card-body">
+                                    <pre id="stressTestResults">No test run yet</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slow Request Test -->
+                <div class="card mt-3">
+                    <div class="card-header bg-info text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-hourglass-half me-2"></i>Slow Request Test
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="slowRequestForm">
+                            <div class="mb-3">
+                                <label for="delaySeconds" class="form-label">Delay (seconds)</label>
+                                <input type="number" class="form-control" id="delaySeconds" value="5" min="1" max="30">
+                            </div>
+                            <button type="submit" class="btn btn-info" id="runSlowRequest">
+                                <i class="fas fa-play me-1"></i>Run Slow Request
+                            </button>
+                        </form>
+                        <div class="mt-3">
+                            <div class="card bg-light">
+                                <div class="card-header">Results</div>
+                                <div class="card-body">
+                                    <pre id="slowRequestResults">No test run yet</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Load Test Panel -->
+            <div class="col-md-6" id="loadTest">
+                <div class="card">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 text-danger">
+                            <i class="fas fa-weight-hanging me-2"></i>Load Test
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Connection Pool Test -->
+                        <div class="card">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-database me-2"></i>Connection Pool Test
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="connectionPoolForm">
+                                    <div class="mb-3">
+                                        <label for="requests" class="form-label">Number of Requests</label>
+                                        <input type="number" class="form-control" id="requests" value="50" min="1" max="200">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="sleepMillis" class="form-label">Sleep Time (ms)</label>
+                                        <input type="number" class="form-control" id="sleepMillis" value="500" min="100" max="10000">
+                                    </div>
+                                    <button type="submit" class="btn btn-danger" id="runConnectionPool">
+                                        <i class="fas fa-play me-1"></i>Run Connection Pool Test
+                                    </button>
+                                </form>
+                                <div class="mt-3">
+                                    <div class="card bg-light">
+                                        <div class="card-header">Results</div>
+                                        <div class="card-body">
+                                            <pre id="connectionPoolResults">No test run yet</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Memory Pressure Test -->
+                        <div class="card mt-3">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-memory me-2"></i>Memory Pressure Test
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="memoryPressureForm">
+                                    <div class="mb-3">
+                                        <label for="mbToAllocate" class="form-label">Memory to Allocate (MB)</label>
+                                        <input type="number" class="form-control" id="mbToAllocate" value="100" min="10" max="500">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="holdForSeconds" class="form-label">Hold For (seconds)</label>
+                                        <input type="number" class="form-control" id="holdForSeconds" value="60" min="5" max="300">
+                                    </div>
+                                    <button type="submit" class="btn btn-success" id="runMemoryPressure">
+                                        <i class="fas fa-play me-1"></i>Run Memory Pressure Test
+                                    </button>
+                                </form>
+                                <div class="mt-3">
+                                    <div class="card bg-light">
+                                        <div class="card-header">Results</div>
+                                        <div class="card-body">
+                                            <pre id="memoryPressureResults">No test run yet</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Release Memory Button -->
+                        <div class="d-grid gap-2 mt-3">
+                            <button class="btn btn-outline-danger" id="releaseAllMemory">
+                                <i class="fas fa-trash-alt me-1"></i>Release All Memory
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="js/api.js"></script>
+    <script src="js/monitor.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Toggle sidebar on mobile
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.querySelector('.main-content').classList.toggle('active');
+            document.querySelector('.navbar').classList.toggle('active');
+        });
+
+        // Handle navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function() {
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Helper function to update results
+        function updateResults(elementId, data) {
+            const resultsElement = document.getElementById(elementId);
+            if (data.error) {
+                resultsElement.innerHTML = `Error: ${data.message}\n${data.details || ''}`;
+                resultsElement.style.color = 'red';
+            } else {
+                resultsElement.innerHTML = JSON.stringify(data, null, 2);
+                resultsElement.style.color = 'initial';
+            }
+        }
+
+        // Helper function to show loading state
+        function setLoading(buttonId, isLoading) {
+            const button = document.getElementById(buttonId);
+            if (isLoading) {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Running...';
+            } else {
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-play me-1"></i>Run Test';
+            }
+        }
+
+        // Prevent form submission from scrolling to top and handle API calls
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formId = this.id;
+                
+                try {
+                    switch(formId) {
+                        case 'stressTestForm':
+                            setLoading('runStressTest', true);
+                            const concurrentRequests = parseInt(document.getElementById('concurrentRequests').value);
+                            const includeDuplicates = document.getElementById('includeDuplicates').checked;
+                            const stressTestResult = await API.stressTest.runStressTest(concurrentRequests, includeDuplicates);
+                            updateResults('stressTestResults', stressTestResult);
+                            setLoading('runStressTest', false);
+                            break;
+
+                        case 'slowRequestForm':
+                            setLoading('runSlowRequest', true);
+                            const delaySeconds = parseInt(document.getElementById('delaySeconds').value);
+                            const slowRequestResult = await API.stressTest.runSlowRequest(delaySeconds);
+                            updateResults('slowRequestResults', slowRequestResult);
+                            setLoading('runSlowRequest', false);
+                            break;
+
+                        case 'connectionPoolForm':
+                            setLoading('runConnectionPool', true);
+                            const requests = parseInt(document.getElementById('requests').value);
+                            const sleepMillis = parseInt(document.getElementById('sleepMillis').value);
+                            const poolResult = await API.loadTest.runConnectionPool(requests, sleepMillis);
+                            updateResults('connectionPoolResults', poolResult);
+                            setLoading('runConnectionPool', false);
+                            break;
+
+                        case 'memoryPressureForm':
+                            setLoading('runMemoryPressure', true);
+                            const mbToAllocate = parseInt(document.getElementById('mbToAllocate').value);
+                            const holdForSeconds = parseInt(document.getElementById('holdForSeconds').value);
+                            const memoryResult = await API.loadTest.runMemoryPressure(mbToAllocate, holdForSeconds);
+                            updateResults('memoryPressureResults', memoryResult);
+                            setLoading('runMemoryPressure', false);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Test execution failed:', error);
+                    updateResults(`${formId.replace('Form', 'Results')}`, {
+                        error: true,
+                        message: 'Test execution failed',
+                        details: error.message
+                    });
+                    // Reset loading state for all buttons
+                    document.querySelectorAll('button[id^="run"]').forEach(button => {
+                        button.disabled = false;
+                        button.innerHTML = '<i class="fas fa-play me-1"></i>Run Test';
+                    });
+                }
+            });
+        });
+
+        // Handle Release All Memory button
+        document.getElementById('releaseAllMemory').addEventListener('click', async function() {
+            try {
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Releasing...';
+                const result = await API.loadTest.releaseAllMemory();
+                alert(result.message || 'Memory released successfully');
+            } catch (error) {
+                console.error('Failed to release memory:', error);
+                alert('Failed to release memory: ' + error.message);
+            } finally {
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-trash-alt me-1"></i>Release All Memory';
+            }
+        });
+    </script>
+</body>
+</html> 
