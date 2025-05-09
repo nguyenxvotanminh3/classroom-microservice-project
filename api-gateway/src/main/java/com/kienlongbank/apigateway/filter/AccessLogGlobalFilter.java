@@ -32,6 +32,9 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Global filter for logging API access information
+ */
 @Component
 public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger("ACCESS_LOG");
@@ -40,10 +43,16 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
     private static final int MAX_ARRAY_ELEMENTS = 3; // Maximum number of array elements to show
     private final ObjectMapper objectMapper;
 
+    /**
+     * Initialize filter with ObjectMapper
+     */
     public AccessLogGlobalFilter() {
         this.objectMapper = new ObjectMapper();
     }
 
+    /**
+     * Format JSON content to be more readable in logs
+     */
     private String formatJson(String content) {
         try {
             if (content == null || content.isEmpty()) {
@@ -60,6 +69,9 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
         }
     }
 
+    /**
+     * Limit array size in JSON for more concise logging
+     */
     private void limitArraySize(JsonNode node) {
         if (node.isObject()) {
             ObjectNode objectNode = (ObjectNode) node;
@@ -87,6 +99,9 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
         }
     }
 
+    /**
+     * Format body content based on content type
+     */
     private String formatBody(String bodyContent, String contentType) {
         if (contentType != null && contentType.contains(MediaType.APPLICATION_JSON_VALUE)) {
             return formatJson(bodyContent);
@@ -94,10 +109,16 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
         return bodyContent;
     }
 
+    /**
+     * Determine if request body should be logged
+     */
     private boolean shouldShowRequestBody(ServerHttpRequest request) {
         return request.getMethod() != HttpMethod.GET;
     }
 
+    /**
+     * Filter and log request/response information
+     */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -209,6 +230,9 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
             });
     }
 
+    /**
+     * Extract client IP address from request headers or remote address
+     */
     private String getClientIp(ServerHttpRequest request) {
         String forwardedFor = request.getHeaders().getFirst("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isEmpty()) {
@@ -218,6 +242,9 @@ public class AccessLogGlobalFilter implements GlobalFilter, Ordered {
             request.getRemoteAddress().toString() : "unknown";
     }
 
+    /**
+     * Define filter execution order
+     */
     @Override
     public int getOrder() {
         return -1;

@@ -8,6 +8,7 @@ import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -47,11 +48,17 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
     private final Tracer tracer;
 
+    /**
+     * Initialize filter with tracer
+     */
     public AuthenticationFilter(Tracer tracer) {
         super(Config.class);
         this.tracer = tracer;
     }
     
+    /**
+     * Initialize excluded paths after construction
+     */
     @jakarta.annotation.PostConstruct
     public void init() {
         Span span = tracer.spanBuilder("gateway.auth.init")
@@ -72,110 +79,161 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         }
     }
 
+    /**
+     * Apply authentication filter to request
+     */
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+            String path = request.getURI().getPath();
+
+            // Kiểm tra các điều kiện bỏ qua xác thực trước khi tạo span
+            if (config.isDisabled() || shouldSkipAuth(path, request.getMethod())) {
+                return chain.filter(exchange);
+            }
+
             return Mono.deferContextual(contextView -> {
                 Span authSpan = tracer.spanBuilder("gateway.auth")
                     .setParent(Context.current())
                     .setAttribute("component", "authentication_filter")
+                    .setAttribute("request.path", path)
                     .startSpan();
-
-                return Mono.using(
-                    authSpan::makeCurrent,
-                    authScope -> {
-                        ServerHttpRequest request = exchange.getRequest();
-                        String path = request.getURI().getPath();
-                        
-                        authSpan.setAttribute("request.path", path);
-                        
-                        if (config.isDisabled()) {
-                            authSpan.setAttribute("auth.skipped", true);
-                            return chain.filter(exchange);
-                        }
-
-                        if (path.equals("/api/users") && HttpMethod.POST.equals(request.getMethod())) {
-                            authSpan.setAttribute("auth.skipped", "user_creation");
-                            return chain.filter(exchange);
-                        }
-                        
-                        for (String excludedPath : excludedPaths) {
-                            if (path.trim().startsWith(excludedPath.trim())) {
-                                authSpan.setAttribute("auth.skipped", "excluded_path");
-                                return chain.filter(exchange);
-                            }
-                        }
-
-                        if (isSwaggerRequest(path)) {
-                            authSpan.setAttribute("auth.skipped", "swagger");
-                            return chain.filter(exchange);
-                        }
-
-                        if (path.startsWith("/api/actuator/")) {
-                            authSpan.setAttribute("auth.skipped", "actuator");
-                            return chain.filter(exchange);
-                        }
-
-                        String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-                        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                            authSpan.setAttribute("auth.error", "missing_token");
-                            authSpan.setStatus(StatusCode.ERROR);
-                            return onError(exchange, "No authorization header");
-                        }
-
-                        String token = authHeader.substring(7);
-                        
-                        Span validateSpan = tracer.spanBuilder("gateway.auth.validate_token")
-                            .setAttribute("token.length", token.length())
-                            .startSpan();
-
-                        return Mono.using(
-                            validateSpan::makeCurrent,
-                            validationScope -> Mono.fromCallable(() -> securityService.validateToken(token))
-                                .flatMap(isValid -> {
-                                    validateSpan.setAttribute("token.valid", isValid);
-                                    if (!isValid) {
-                                        validateSpan.setStatus(StatusCode.ERROR);
-                                        return Mono.error(new RuntimeException("Invalid token"));
-                                    }
-                                    
-                                    // Kiểm tra quyền nếu có danh sách quyền yêu cầu
-                                    if (config.getRequiredRoles() != null && !config.getRequiredRoles().isEmpty()) {
-                                        validateSpan.setAttribute("required_roles", String.join(",", config.getRequiredRoles()));
-                                        log.debug("Checking roles for path {}: {}", path, config.getRequiredRoles());
-                                        
-                                        return Mono.fromCallable(() -> securityService.hasAnyRole(token, config.getRequiredRoles()))
-                                            .flatMap(hasRole -> {
-                                                validateSpan.setAttribute("has_required_role", hasRole);
-                                                if (!hasRole) {
-                                                    validateSpan.setStatus(StatusCode.ERROR);
-                                                    return onError(exchange, "Insufficient privileges");
-                                                }
-                                                return chain.filter(exchange);
-                                            });
-                                    }
-                                    
-                                    return chain.filter(exchange);
-                                })
-                                .onErrorResume(error -> {
-                                    log.error("Error during token validation or role check: {}", error.getMessage());
-                                    validateSpan.setStatus(StatusCode.ERROR);
-                                    validateSpan.setAttribute("error", error.getMessage());
-                                    return onError(exchange, error.getMessage());
-                                })
-                                .doFinally(signalType -> validateSpan.end()),
-                                Scope::close
-                        );
-                    },
-                    authScope -> {
+                
+                try (Scope authScope = authSpan.makeCurrent()) {
+                    // Kiểm tra token
+                    String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+                    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                        authSpan.setAttribute("auth.error", "missing_token");
+                        authSpan.setStatus(StatusCode.ERROR);
                         authSpan.end();
-                        authScope.close();
+                        return onError(exchange, "No authorization header");
                     }
-                );
+
+                    String token = authHeader.substring(7);
+                    
+                    return validateTokenAndCheckRoles(token, path, config, exchange, chain, authSpan);
+                } catch (Exception e) {
+                    authSpan.setAttribute("auth.error", e.getClass().getSimpleName());
+                    authSpan.setStatus(StatusCode.ERROR);
+                    authSpan.end();
+                    return onError(exchange, "Authentication error: " + e.getMessage());
+                }
             });
         };
     }
 
+    /**
+     * Check if authentication should be skipped for given path
+     */
+    private boolean shouldSkipAuth(String path, HttpMethod method) {
+        // Kiểm tra đăng ký người dùng
+        if (path.equals("/api/users") && HttpMethod.POST.equals(method)) {
+            return true;
+        }
+        
+        // Kiểm tra paths được loại trừ
+        for (String excludedPath : excludedPaths) {
+            if (path.trim().startsWith(excludedPath.trim())) {
+                return true;
+            }
+        }
+
+        // Kiểm tra Swagger
+        if (isSwaggerRequest(path)) {
+            return true;
+        }
+
+        // Kiểm tra actuator
+        if (path.startsWith("/api/actuator/")) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Validate token and check if user has required roles
+     */
+    private Mono<Void> validateTokenAndCheckRoles(String token, String path, Config config, 
+            ServerWebExchange exchange, GatewayFilterChain chain, Span parentSpan) {
+        
+        Span validateSpan = tracer.spanBuilder("gateway.auth.validate_token")
+            .setParent(Context.current())
+            .setAttribute("token.length", token.length())
+            .startSpan();
+            
+        return Mono.using(
+            validateSpan::makeCurrent,
+            validationScope -> Mono.fromCallable(() -> securityService.validateToken(token))
+                .flatMap(isValid -> {
+                    validateSpan.setAttribute("token.valid", isValid);
+                    if (!isValid) {
+                        validateSpan.setStatus(StatusCode.ERROR);
+                        return Mono.error(new InvalidTokenException("Invalid token"));
+                    }
+                    
+                    // Kiểm tra quyền nếu có danh sách quyền yêu cầu
+                    if (config.getRequiredRoles() != null && !config.getRequiredRoles().isEmpty()) {
+                        validateSpan.setAttribute("required_roles", String.join(",", config.getRequiredRoles()));
+                        log.debug("Checking roles for path {}: {}", path, config.getRequiredRoles());
+                        
+                        return Mono.fromCallable(() -> securityService.hasAnyRole(token, config.getRequiredRoles()))
+                            .flatMap(hasRole -> {
+                                validateSpan.setAttribute("has_required_role", hasRole);
+                                if (!hasRole) {
+                                    validateSpan.setStatus(StatusCode.ERROR);
+                                    return Mono.error(new InsufficientPrivilegesException("Insufficient privileges"));
+                                }
+                                return chain.filter(exchange);
+                            });
+                    }
+                    
+                    return chain.filter(exchange);
+                })
+                .onErrorResume(error -> {
+                    String errorMessage = error.getMessage();
+                    log.error("Error during token validation or role check: {}", errorMessage);
+                    validateSpan.setStatus(StatusCode.ERROR);
+                    validateSpan.setAttribute("error", errorMessage);
+                    validateSpan.setAttribute("error.type", error.getClass().getSimpleName());
+                    
+                    if (error instanceof InvalidTokenException) {
+                        return onError(exchange, "Invalid authentication token");
+                    } else if (error instanceof InsufficientPrivilegesException) {
+                        return onError(exchange, "Insufficient privileges");
+                    } else {
+                        return onError(exchange, "Authentication error: " + errorMessage);
+                    }
+                }),
+            scope -> {
+                validateSpan.end();
+                scope.close();
+            }
+        );
+    }
+    
+    /**
+     * Exception thrown when token is invalid
+     */
+    private static class InvalidTokenException extends RuntimeException {
+        public InvalidTokenException(String message) {
+            super(message);
+        }
+    }
+    
+    /**
+     * Exception thrown when user does not have required roles
+     */
+    private static class InsufficientPrivilegesException extends RuntimeException {
+        public InsufficientPrivilegesException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Get localized message from message source
+     */
     private String getLocalizedMessage(String key, String defaultMessage) {
         Span span = tracer.spanBuilder("gateway.auth.getLocalizedMessage")
             .setAttribute("message.key", key)
@@ -203,6 +261,9 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         }
     }
 
+    /**
+     * Check if request is for Swagger documentation
+     */
     private boolean isSwaggerRequest(String path) {
         Span span = tracer.spanBuilder("gateway.auth.isSwaggerRequest")
             .setAttribute("request.path", path)
@@ -223,6 +284,9 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         }
     }
 
+    /**
+     * Handle authentication error with appropriate response
+     */
     private Mono<Void> onError(ServerWebExchange exchange, String errorMessage) {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
@@ -242,11 +306,17 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         );
     }
 
+    /**
+     * Define order of configuration shortcut fields
+     */
     @Override
     public List<String> shortcutFieldOrder() {
         return Arrays.asList("disabled", "requiredRoles");
     }
 
+    /**
+     * Create new default configuration
+     */
     @Override
     public Config newConfig() {
         Config config = new Config();
@@ -254,17 +324,26 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
         return config;
     }
 
+    /**
+     * Get configuration class
+     */
     @Override
     public Class<Config> getConfigClass() {
         return Config.class;
     }
 
+    /**
+     * Configuration class for authentication filter
+     */
     @Setter
     @Getter
     public static class Config {
         private boolean disabled;
         private List<String> requiredRoles;
 
+        /**
+         * Create default configuration with authentication enabled and no required roles
+         */
         public Config() {
             this.disabled = false;
             this.requiredRoles = new ArrayList<>();
